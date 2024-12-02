@@ -17,7 +17,7 @@ class _TabsState extends State<Tabs> {
     AlarmHistoryPage(),
   ];
   // 动态标题
-  final List<String> _titles = ["患者列表", "报警历史"];
+  final List<String> _titles = ["患者监护", "报警历史"];
   @override
   Widget build(BuildContext context) {
     return Scaffold(

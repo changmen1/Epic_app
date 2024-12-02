@@ -10,150 +10,264 @@ class AlarmHistoryPage extends StatefulWidget {
 }
 
 class _AlarmHistoryPageState extends State<AlarmHistoryPage> {
-  // 创建 TextEditingController 来控制输入框
-  TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  bool _isLoading = false;
+  bool _hasMore = true;
+  final List<AlarmHistory> _alarmList = [];
 
-  // 定义 requestParams 作为请求的参数
   Map<String, dynamic> requestParams = {
     'pageNo': 1,
     'pageSize': 10,
-    'patientName': "", // 初始为空
+    'patientName': "",
   };
+
+  // 根据 alarmLevel 返回不同颜色的圆点
+  Color _getDotColor(String? level) {
+    switch (level) {
+      case '紧急':
+        return Colors.red;
+      case '警告':
+        return Colors.yellow;
+      case '报警':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
-    // 在页面销毁时释放资源
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  // 用于更新查询条件并重新请求数据
+  Future<void> _loadData({bool isRefresh = false}) async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      if (isRefresh) {
+        requestParams['pageNo'] = 1;
+        _alarmList.clear();
+      }
+    });
+
+    try {
+      final List<AlarmHistory> newData = await AlarmHistoryService().getAllCompanies(requestParams);
+      setState(() {
+        _alarmList.addAll(newData);
+        _hasMore = newData.length >= requestParams['pageSize'];
+        if (_hasMore) {
+          requestParams['pageNo']++;
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading data: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        _hasMore) {
+      _loadData();
+    }
+  }
+
   void _updateSearchParams() {
     setState(() {
-      requestParams['patientName'] = _searchController.text; // 更新查询条件
+      requestParams['patientName'] = _searchController.text;
+      requestParams['pageNo'] = 1;
+      _alarmList.clear();
+      _hasMore = true;
+      _loadData();
     });
-  }
-  // 根据 alarmLevel 返回不同颜色的圆点
-  Color _getDotColor(String? level) {
-    if (level == '紧急') {
-      return Colors.red;
-    } else if (level == '警告') {
-      return Colors.yellow;
-    } else if (level == '报警') {
-      return Colors.blue;
-    } else {
-      return Colors.grey; // 意外情况 老周不反回类型
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(8),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).scaffoldBackgroundColor,
+              Colors.blue.withOpacity(0.1),
+            ],
+          ),
+        ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 搜索框
-            TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                _updateSearchParams(); // 每次输入框内容变化时更新请求参数
-              },
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: const Color(0xFF2C3E50),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                  borderSide: const BorderSide(
-                    color: Colors.white30,
-                    width: 1.0,
-                  ),
-                ),
-                hintText: "请输入患者姓名",
-                hintStyle: const TextStyle(
-                  color: Colors.white70,
-                ),
-                prefixIcon: const Icon(Icons.search),
-                prefixIconColor: Colors.white,
-                // prefixIconColor: Colors.purple.shade900,
-              ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: _buildSearchBar(),
             ),
-            const SizedBox(
-              height: 20.0,
-            ),
-            // FutureBuilder 处理数据请求
             Expanded(
-              child: FutureBuilder<List<AlarmHistory>>(
-                future: AlarmHistoryService().getAllCompanies(requestParams), // 使用更新后的 requestParams
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Center(
-                      child: Text("网络请求错误"),
-                    );
-                  }
-                  if (snapshot.hasData) {
-                    List<AlarmHistory> data = snapshot.data!;
-                    return  data.isEmpty ? const Center(
-                      child: Text(
-                        "没有当前患者的数据",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22.0,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ) :
-                      ListView.builder(
-                      itemCount: data.length,
-                      itemBuilder: (context, index) => ListTile(
-                        contentPadding: const EdgeInsets.all(8.0),
-                        title: Text(
-                          "${data[index].patientName} ${data[index].content}" ?? "--",
-                          style: const TextStyle(
-                            color: Colors.white,
-                          ),
-                        ),
-                        subtitle: Text(
-                          data[index].createdTime ?? "--",
-                          style: const TextStyle(
-                            color: Colors.white60,
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 小圆点
-                            CircleAvatar(
-                              radius: 5, // 圆点大小
-                              backgroundColor: _getDotColor(data[index].level),
-                            ),
-                            const SizedBox(width: 8), // 圆点与文本之间的间距
-                            Text(
-                              data[index].level ?? "--",
-                              style: const TextStyle(fontSize: 15),
-                            ),
-                          ],
-                        ),
-                        leading: Text(
-                          data[index].devName ?? "--",
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      ),
-                    );
-                  }
-                  else {
-                    return const Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-                },
+              child: RefreshIndicator(
+                onRefresh: () => _loadData(isRefresh: true),
+                child: _buildAlarmList(),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        // 根据主题设置背景色
+        color: isDarkMode ? Colors.grey[800] : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        onSubmitted: (_) => _updateSearchParams(),
+        // 设置输入文字颜色
+        style: TextStyle(
+          color: isDarkMode ? Colors.white : Colors.black,
+        ),
+        decoration: InputDecoration(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          hintText: "搜索患者姓名",
+          // 设置提示文字颜色
+          hintStyle: TextStyle(
+            color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            // 设置图标颜色
+            color: isDarkMode ? Colors.blue[300] : Colors.blue,
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(
+              Icons.clear,
+              // 设置清除按钮颜色
+              color: isDarkMode ? Colors.grey[400] : Colors.grey,
+            ),
+            onPressed: () {
+              _searchController.clear();
+              _updateSearchParams();
+            },
+          ),
+          // 设置填充颜色
+          fillColor: isDarkMode ? Colors.grey[800] : Colors.white,
+          filled: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlarmList() {
+    if (_alarmList.isEmpty && !_isLoading) {
+      return const Center(
+        child: Text(
+          "暂无报警记录",
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: _alarmList.length + (_hasMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _alarmList.length) {
+          return _buildLoadingIndicator();
+        }
+        return _buildAlarmCard(_alarmList[index]);
+      },
+    );
+  }
+
+  Widget _buildAlarmCard(AlarmHistory alarm) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 4,
+      shadowColor: Colors.blue.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 4,
+                  backgroundColor: _getDotColor(alarm.level),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  alarm.level ?? "--",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  alarm.devName ?? "--",
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "${alarm.patientName} ${alarm.content}" ?? "--",
+              style: const TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              alarm.createdTime ?? "--",
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      alignment: Alignment.center,
+      child: const CircularProgressIndicator(),
     );
   }
 }

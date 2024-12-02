@@ -38,6 +38,9 @@ dependencies:
   http: ^1.2.2
   mqtt_client: ^10.5.1
   sp_util: ^2.0.3
+  flutter_local_notifications: ^18.0.1
+  fl_chart: ^0.69.2
+#  用于绘制心电图，后期可能需要更改暂时没找到类似canvas效果的工具
 
 dev_dependencies:
   flutter_test:

@@ -1,14 +1,26 @@
 import 'package:epic_david_app/pages/login_page.dart';
+import 'package:epic_david_app/services/notification_service.dart';
 import 'package:epic_david_app/tabs.dart';
 import 'package:epic_david_app/themes/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-void main() {
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().init(); // 初始化通知服务
+  testNotification();
   runApp(ChangeNotifierProvider(
     create: (context) => ThemeProvider(),
     child: const MyApp(),
   ));
+}
+
+void testNotification() {
+  NotificationService().showAlarmNotification(
+    title: '测试通知',
+    body: '戴维医疗',
+    payload: 'test',
+  );
 }
 
 class MyApp extends StatelessWidget {
